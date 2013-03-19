@@ -1,0 +1,48 @@
+<?php
+
+/**
+ * @file
+ * Install and Uninstall functions for soshake.
+ */
+
+/**
+ * Implementation of soshake_install().
+ */
+function soshake_install() {
+  $db = db_insert('block')
+    ->fields(array(
+      'status' => 1,
+      'weight' => -8,
+      'region' => "footer",
+      'module' => "soshake",
+      'delta' => "soshake-footer-scripts",
+      'theme' => $active_theme->name,
+      'custom' => 0,
+      'visibility' => 0,
+      'pages' => '',
+      'title' => '<none>',
+      'cache' => -1,
+    ))
+    ->execute();
+}
+
+/**
+ * Implementation of soshake_uninstall().
+ */
+function soshake_uninstall() {
+  global $theme_key, $base_url;
+  $themes = list_themes();
+  $theme_object = $themes[$theme_key];
+  foreach ($themes as $theme) {
+    if ($theme->status == 1 && $theme->name != $theme_object->name) {
+      $active_theme = $theme;
+    }
+  }
+  foreach ($active_theme->info["regions"] as $hook => $name) {
+    variable_del("soshake-widgets_$hook");
+    $db = db_delete('block')->condition('delta', 'soshake-' . $hook)->execute();
+  }
+  variable_del("soshake-align");
+  variable_del("soshake-layout");
+  $db = db_delete('block')->condition('delta', "soshake-footer-scripts")->execute();
+}

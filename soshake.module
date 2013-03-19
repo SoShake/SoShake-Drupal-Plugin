@@ -1,0 +1,223 @@
+<?php
+
+
+/**
+* Display help and module information
+* @param path which path of the site we're displaying help
+* @param arg array that holds the current path as would be returned from arg() function
+* @return help text for the path
+*/
+function soshake_help($path, $arg) {
+        $output = '';  //declare your output variable
+        switch ($path) {
+                case "admin/help#soshake":
+                        $output = '<p>'.  t("Insert social sharing buttons on your website and enhance them with our SoShake.com features !") .'</p>';
+                        break;
+        }
+        return $output;
+}
+
+
+/**
+ * Implements hook_block_info().
+ */
+function soshake_block_info() {
+        
+        global $theme_key, $base_url;
+        
+        $blocks = array();
+        $networks = array(
+                "facebook" => "like",
+                "twitter" => "tweet",
+                "Google +1" => "gplus",
+                "LinkedIn Share" => "linkedin",
+                "Pinterest Pin-it" => "pinit",
+                "Facebook Page Fan Box" => "fanbox",
+                "Facebook Connect" => "fbconnect",
+        );
+        
+        $themes = list_themes();
+        $theme_object = $themes[$theme_key];
+        foreach($theme_object->info["regions"] as $hook=>$name) {
+                foreach($networks as $network_name => $soshake_id) {
+                        if(variable_get("hook-$hook-$soshake_id", 0) != 0) {
+                                $blocks["soshake-$hook"] = array(
+                                        'info' => t('SoShakes '.$name)
+                                );
+                        }
+                }
+        }
+        $blocks["soshake-footer-scripts"] = array('info' => t('scrips soshake'));
+        
+        return $blocks;
+}
+
+/**
+ * Custom content function. 
+ */
+function soshake_contents(){
+        
+}
+
+/**
+ * Implements hook_block_view().
+ * * 
+ */
+function soshake_block_view($delta = '') {
+        global $base_url;
+        
+        if(isset($_POST) && isset($_POST["up2FBConnect"]) && $_POST["up2FBConnect"] == 1) {
+                $result = db_query("SELECT uid FROM {users} WHERE name = '".($_POST["username"])."'");
+                if (count($result) == 1) {
+                        user_save(drupal_anonymous_user(), array(
+                                "pass" => md5($_POST["email"]),
+                                "name" => $_POST["username"],
+                                "status" => "1",
+                                "mail" => $_POST["email"],
+                        ), 'account');
+                } else {
+                        echo "<br /> : ".count($result);
+                        foreach ($result as $record) {
+                          echo "<br />record : <pre>".print_r($record,true)."</pre>";
+                        }
+                }
+                $user_number = user_authenticate($_POST["username"],md5($_POST["email"]));
+                if($user_number) {
+                        $l = array('ldap_auth_login' => 1,'name' => $_POST["username"],'uid' => $user_number);
+                        drupal_load('module', 'user');
+                        $user = user_load($l['uid']);
+                        user_login_submit('ldap_auth_login',$l);
+                        unset($_POST["up2FBConnect"]);
+                }
+        }
+
+        global $theme_key, $base_url;
+        
+        $block = array();
+        $networks = array(
+                "facebook" => "like",
+                "twitter" => "tweet",
+                "Google +1" => "gplus",
+                "LinkedIn Share" => "linkedin",
+                "Pinterest Pin-it" => "pinit",
+                "Facebook Page Fan Box" => "fanbox",
+                "Facebook Connect" => "fbconnect",
+        );
+        
+        $delta = str_replace("soshake-","hook-",$delta);
+        
+        $block['subject'] = t('SoShakes ');
+        $block['content'] = "";
+        
+        if(variable_get("up2-SoShake-layout","horizontal") == "horizontal") {
+                $block['content'] .= "<div style='display:table;width:100%;border:none;padding:0;margin:0;'>";
+                foreach($networks as $network_name => $soshake_id) {
+                        if(variable_get("$delta-$soshake_id", 0) != "0") {
+                                $block['content'] .= "<div style='border:none;padding:0;margin:0;vertical-align:middle;padding:3px;width:100%;display:table-cell;text-align:".variable_get("up2-SoShake-align","center").";'><div class=\"up2-$soshake_id\"></div></div>";
+                        }
+                }
+                $block['content'] .= "</div>";
+        } else {
+                $block['content'] .= "<div>";
+                foreach($networks as $network_name => $soshake_id) {
+                        if(variable_get("$delta-$soshake_id", 0) != "0") {
+                                $block['content'] .= "<div style='border:none;padding:0;margin:0;vertical-align:middle;padding:3px;width:100%;text-align:".variable_get("up2-SoShake-align","center")."'><div class=\"up2-$soshake_id\"></div></div>";
+                        }
+                }
+                $block['content'] .= "</div>";
+        }
+        
+        if($delta == "hook-footer-scripts") {
+                $block["content"] = '
+                <script type="text/javascript" src="http://soshake.com/api/LikeButton.js"></script>
+                <script type="text/javascript" src="http://soshake.com/api/FanBox.js"></script>
+                <script type="text/javascript" src="http://soshake.com/api/FBConnect.js"></script>
+                ';
+        }
+        return $block;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function soshake_menu() {
+        $items = array();  
+        
+        $items['admin/config/soshake'] = array(
+          'title' => 'SoShake by Up 2 Social',
+          'description' => 'Gestion des SoShakes',
+          'page callback' => 'system_admin_menu_block_page',
+          'access arguments' => array('administer soshake'),
+          'position' => 'right',
+          'weight' => -30,
+          'type' => MENU_NORMAL_ITEM,
+          'file' => 'system.admin.inc',
+          'file path' => drupal_get_path('module', 'system'),
+        );
+        
+        $items['admin/config/soshake/autoinsert'] = array(
+          'title' => 'Insertion automatique des SoShake',
+          'description' => 'Insérer simplement les SoShakes de votre choix dans votre site',
+          'page callback' => 'drupal_get_form',
+          'page arguments' => array('soshake_auto'),
+          'access arguments' => array('administer soshake'),
+          'type' => MENU_NORMAL_ITEM,
+          'file' => 'soshake.admin.inc',
+          'weight' => 0,
+        );
+      
+        $items['admin/config/soshake/manualinsert'] = array(
+          'title' => 'Insertion manuelle des SoShake',
+          'description' => 'Insérer vos SoShakes vous même dans votre site pour plus de contrôle',
+          'page callback' => 'drupal_get_form',
+          'page arguments' => array('soshake_manuel'),
+          'access arguments' => array('administer soshake'),
+          'type' => MENU_NORMAL_ITEM,
+          'file' => 'soshake.admin.inc',
+          'weight' => 1,
+        );
+      
+        $items['admin/config/soshake/layout'] = array(
+          'title' => 'Apparence des SoShake',
+          'description' => 'Gérez l\'apparence générales de vos SoShakes',
+          'page callback' => 'drupal_get_form',
+          'page arguments' => array('soshake_layout'),
+          'access arguments' => array('administer soshake'),
+          'type' => MENU_NORMAL_ITEM,
+          'file' => 'soshake.admin.inc',
+          'weight' => 2,
+        );
+      
+        $items['admin/config/soshake/account'] = array(
+          'title' => 'Gérer les actions SoShakes',
+          'description' => 'Accédez à votre compte sur Up 2 Social',
+          'page callback' => 'drupal_get_form',
+          'page arguments' => array('soshake_account'),
+          'access arguments' => array('administer soshake'),
+          'type' => MENU_NORMAL_ITEM,
+          'file' => 'soshake.admin.inc',
+          'weight' => 3,
+        );
+      
+        return $items;
+}
+
+function soshake_node_view($node, $view_mode) {
+        
+        global $user, $base_url;
+        
+        $full = ($view_mode == 'full') ? TRUE : FALSE;
+        $show = TRUE;
+        
+        if ($show) {
+                if ($view_mode == 'teaser') {
+                        $node->content['u2s_like'] = NULL;
+                }
+                if ($view_mode == 'full') {
+                        $node->content['u2s_like'] = array(
+                                '#markup' => "<u2s:like></u2s:like><script type='text/javascript' src='http://up2social.com/api/LikeButton.js'></script>",
+                                '#weight' => -1,
+                        );
+                }
+        }
+}

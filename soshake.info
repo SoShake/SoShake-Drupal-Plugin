@@ -1,0 +1,4 @@
+; $Id$
+name = SoShake - by Up 2 Social
+description = "Utilisez la puissance des réseaux sociaux sur voter site !"
+core = 7.x
